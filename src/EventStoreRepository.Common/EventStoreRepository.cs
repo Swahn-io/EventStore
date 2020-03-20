@@ -14,7 +14,7 @@ namespace EventStoreRepository.Common
         private readonly IEventStoreConnection _connection;
         private readonly EventStoreSettings _settings;
 
-        public EventStoreRepository(IAggregateFactory factory, IEventStoreConnection connection, 
+        public EventStoreRepository(IAggregateFactory factory, IEventStoreConnection connection,
             IOptionsMonitor<EventStoreSettings> settings)
         {
             _factory = factory;
@@ -22,14 +22,15 @@ namespace EventStoreRepository.Common
             _settings = settings.CurrentValue;
         }
 
-        public async Task SaveAsync<TAggregate>(IAggregateRoot<TAggregate> aggregateRoot)
+        public async Task SaveAsync<TAggregate>(IAggregateRoot<TAggregate> aggregateRoot, string stream)
         {
-            await _connection.AppendToStreamAsync($"{aggregateRoot.GetType().Name}-{aggregateRoot.Id}",
-                aggregateRoot.OriginalVersion, aggregateRoot.GetUncommittedEvents());
+            await _connection.AppendToStreamAsync(stream, aggregateRoot.OriginalVersion,
+                aggregateRoot.GetUncommittedEvents());
             aggregateRoot.ClearUncommittedEvents();
         }
 
-        public async Task<TAggregateRoot> GetByStream<TAggregateRoot, TAggregate>(string stream, int maxVersion = Int32.MaxValue)
+        public async Task<TAggregateRoot> GetByStream<TAggregateRoot, TAggregate>(string stream,
+            int maxVersion = Int32.MaxValue)
             where TAggregateRoot : class, IAggregateRoot<TAggregate>
         {
             if (maxVersion < 0) throw new InvalidOperationException("Cannot get max version less than 0.");
@@ -63,14 +64,15 @@ namespace EventStoreRepository.Common
                 {
                     aggregate.AddEvent(new EventData(resolvedEvent.Event.EventId,
                         resolvedEvent.Event.EventType, resolvedEvent.Event.IsJson,
-                        resolvedEvent.Event.Data, resolvedEvent.Event.Metadata), false);
+                        resolvedEvent.Event.Data, resolvedEvent.Event.Metadata));
                 }
             } while (maxVersion >= currentSlice.NextEventNumber && !currentSlice.IsEndOfStream);
 
             if (aggregate.OriginalVersion != maxVersion && maxVersion < Int32.MaxValue)
             {
-                throw new AggregateVersionException(stream, typeof (TAggregateRoot), aggregate.OriginalVersion, maxVersion);
-            }                
+                throw new AggregateVersionException(stream, typeof(TAggregateRoot), aggregate.OriginalVersion,
+                    maxVersion);
+            }
 
             return aggregate as TAggregateRoot;
         }

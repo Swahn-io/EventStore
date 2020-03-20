@@ -1,32 +1,42 @@
 using System;
 using System.Collections.Generic;
 using EventStore.ClientAPI;
+using EventStoreRepository.Common.DomainEvents;
+using EventStoreRepository.Common.Extensions;
 
 namespace EventStoreRepository.Common.Aggregates
 {
     public abstract class BaseAggregateRoot<TAggregate> : IAggregateRoot<TAggregate> where TAggregate : new()
     {
-        protected readonly List<EventData> Events = new List<EventData>();
+        protected byte[] Metadata;
+        protected readonly List<IDomainEvent> DomainEvents = new List<IDomainEvent>();
         protected readonly List<EventData> UncommittedEvents = new List<EventData>();
         
-        public Guid Id { get; }
+        public string Id { get; protected set; }
         public long OriginalVersion { get; private set; }
         public long UncommittedVersion { get; private set; }
         public TAggregate Aggregate { get; } = new TAggregate();
 
-        protected BaseAggregateRoot(Guid id, int version = -1)
+        protected BaseAggregateRoot()
         {
-            Id = id;
-            UncommittedVersion = OriginalVersion = version;
+            UncommittedVersion = OriginalVersion = -1;
         }
-        
-        public void AddEvent(EventData domainEvent, bool isUncommitted = true)
+
+        public void AddEvent(EventData eventData)
         {
-            ApplyEvent(domainEvent);
-            Events.Add(domainEvent);
+            var domainEvent = GetDomainEvent(eventData);
+            AddEvent(domainEvent, false);
+        }
+
+        public void AddEvent(IDomainEvent domainDomain, bool isUncommitted = true)
+        {
+            ApplyEvent(domainDomain);
+            DomainEvents.Add(domainDomain);
             if (isUncommitted)
             {
-                UncommittedEvents.Add(domainEvent);
+                var eventData = new EventData(Guid.NewGuid(), domainDomain.EventType,
+                    true, domainDomain.GetBytes(), GetMetaData());
+                UncommittedEvents.Add(eventData);
             }
             else
             {
@@ -45,6 +55,8 @@ namespace EventStoreRepository.Common.Aggregates
             UncommittedEvents.Clear();
         }
 
-        protected abstract void ApplyEvent(EventData domainEvent);
+        protected abstract void ApplyEvent(IDomainEvent domainDomain);
+        protected abstract IDomainEvent GetDomainEvent(EventData eventData);
+        protected abstract byte[] GetMetaData();
     }
 }
